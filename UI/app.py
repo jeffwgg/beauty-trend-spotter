@@ -12,13 +12,15 @@ import isodate
 import random
 import re
 from datetime import datetime, timedelta
-import requests
-from io import BytesIO
 from dotenv import load_dotenv
 
-# Load environment variables from .env file for local development
-load_dotenv()
-
+# Load environment variables from parent directory
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
+try:
+    from web3_data_manager import web3_manager
+except ImportError:
+    st.error("Web3 Data Manager not found. Please ensure web3_data_manager.py is in the same directory.")
+    st.stop()
 warnings.filterwarnings('ignore')
 
 # Page configuration
@@ -149,127 +151,164 @@ def get_youtube_metadata(video_id: str, api_key: str):
         st.error(f"Error fetching video metadata: {str(e)}")
         return None
 
-def generate_viral_prediction(metadata: dict) -> dict:
-    """Generate hardcoded viral predictions and insights"""
+@st.cache_resource
+def load_ml_models():
+    """Load trained ML models for YouTube prediction"""
+    try:
+        import joblib
+        model_dir = os.path.join(os.path.dirname(__file__), "model")
+        
+        models = {
+            'emerging': joblib.load(os.path.join(model_dir, "meta_emerging.pkl")),
+            'stage': joblib.load(os.path.join(model_dir, "meta_stage.pkl")),
+            'volume': joblib.load(os.path.join(model_dir, "meta_volume.pkl"))
+        }
+        return models
+    except Exception as e:
+        st.error(f"Failed to load ML models: {str(e)}")
+        return None
+
+def prepare_features_for_ml(metadata: dict) -> pd.DataFrame:
+    """Prepare features for ML model prediction"""
+    # Combine text features
+    title = metadata.get("title", "")
+    description = metadata.get("description", "")
+    tags_text = " ".join(metadata.get("tags", []))
+    text_all = f"{title} {description} {tags_text}".strip()
     
-    # Extract features for prediction
+    # Create feature DataFrame matching training format
+    features = pd.DataFrame({
+        'text_all': [text_all],
+        'duration_seconds': [metadata.get("duration_seconds", 0)],
+        'viewCount': [metadata.get("viewCount", 0)],
+        'likeCount': [metadata.get("likeCount", 0)],
+        'commentCount': [metadata.get("commentCount", 0)],
+        'title_len': [len(title)],
+        'desc_len': [len(description)],
+        'tags_len': [len(tags_text)]
+    })
+    
+    return features
+
+def generate_viral_prediction(metadata: dict) -> dict:
+    """Generate ML-based viral predictions using trained models"""
+    
+    # Load models
+    models = load_ml_models()
+    if not models:
+        # Fallback to simple heuristics if models fail
+        return generate_fallback_prediction(metadata)
+    
+    try:
+        # Prepare features
+        features = prepare_features_for_ml(metadata)
+        
+        # Get ML predictions
+        emerging_prob = models['emerging'].predict_proba(features)[0][1]  # Probability of emerging
+        stage_pred = models['stage'].predict(features)[0]  # Stage prediction
+        volume_pred = models['volume'].predict(features)[0]  # Volume prediction
+        
+        # Calculate engagement metrics
+        view_count = metadata["viewCount"]
+        like_count = metadata["likeCount"]
+        comment_count = metadata["commentCount"]
+        engagement_rate = (like_count + comment_count) / max(view_count, 1) * 100
+        likes_per_view = like_count / max(view_count, 1) * 100
+        comments_per_view = comment_count / max(view_count, 1) * 100
+        
+        # Convert ML outputs to user-friendly format
+        viral_score = int(emerging_prob * 100)  # Convert probability to 0-100 scale
+        
+        # Determine viral potential based on ML prediction
+        if emerging_prob >= 0.7:
+            viral_potential = "High"
+            viral_color = "🔥"
+        elif emerging_prob >= 0.4:
+            viral_potential = "Medium"
+            viral_color = "⚡"
+        else:
+            viral_potential = "Low"
+            viral_color = "❄️"
+        
+        # Beauty relevance based on volume prediction (normalized)
+        beauty_score = min(100, max(0, int(volume_pred * 50)))  # Scale volume to 0-100
+        
+        # Generate ML-based insights
+        insights = []
+        
+        if emerging_prob > 0.6:
+            insights.append("🤖 ML Model: High viral potential detected")
+        if stage_pred == "Rising":
+            insights.append("📈 ML Model: Content is in rising trend phase")
+        elif stage_pred == "Peaking":
+            insights.append("🎯 ML Model: Content at peak engagement")
+        elif stage_pred == "Decaying":
+            insights.append("📉 ML Model: Content in declining phase")
+        
+        if volume_pred > 1.0:
+            insights.append("🚀 ML Model: Above-average performance predicted")
+        if engagement_rate > 3:
+            insights.append("💫 High engagement rate indicates strong audience connection")
+        if len(metadata["tags"]) > 8:
+            insights.append("🏷️ Well-optimized with comprehensive tagging strategy")
+        
+        # Map stage to trend category
+        stage_to_trend = {
+            "Rising": "Emerging Beauty Trends",
+            "Peaking": "Mainstream Beauty Content", 
+            "Decaying": "Classic Beauty Techniques"
+        }
+        predicted_trend = stage_to_trend.get(stage_pred, "General Beauty Content")
+        trend_confidence = int(max(emerging_prob, 0.6) * 100)  # Use ML confidence
+        
+        return {
+            "viral_score": viral_score,
+            "viral_potential": viral_potential,
+            "viral_color": viral_color,
+            "beauty_relevance_score": beauty_score,
+            "engagement_rate": engagement_rate,
+            "likes_per_view": likes_per_view,
+            "comments_per_view": comments_per_view,
+            "insights": insights,
+            "predicted_trend": predicted_trend,
+            "trend_confidence": trend_confidence,
+            "ml_stage": stage_pred,
+            "ml_emerging_prob": round(emerging_prob, 3),
+            "ml_volume_score": round(volume_pred, 3),
+            "recommended_actions": [
+                f"ML Recommendation: Focus on {stage_pred.lower()} trend strategies",
+                "Leverage high-performing content elements for future videos",
+                "Monitor engagement patterns for optimization insights",
+                "Consider A/B testing based on ML predictions"
+            ]
+        }
+        
+    except Exception as e:
+        st.error(f"ML prediction failed: {str(e)}")
+        return generate_fallback_prediction(metadata)
+
+def generate_fallback_prediction(metadata: dict) -> dict:
+    """Fallback prediction when ML models fail"""
     view_count = metadata["viewCount"]
     like_count = metadata["likeCount"]
     comment_count = metadata["commentCount"]
-    duration = metadata["duration_seconds"]
-    tags = len(metadata["tags"])
-    
-    # Calculate engagement metrics
     engagement_rate = (like_count + comment_count) / max(view_count, 1) * 100
-    likes_per_view = like_count / max(view_count, 1) * 100
-    comments_per_view = comment_count / max(view_count, 1) * 100
     
-    # Hardcoded prediction logic
-    viral_score = 0
-    
-    # View count factors
-    if view_count > 1000000:
-        viral_score += 30
-    elif view_count > 100000:
-        viral_score += 20
-    elif view_count > 10000:
-        viral_score += 10
-    
-    # Engagement factors
-    if engagement_rate > 5:
-        viral_score += 25
-    elif engagement_rate > 2:
-        viral_score += 15
-    elif engagement_rate > 1:
-        viral_score += 10
-    
-    # Duration factors (sweet spot 60-300 seconds)
-    if 60 <= duration <= 300:
-        viral_score += 15
-    elif duration <= 60:
-        viral_score += 10
-    
-    # Tags factor
-    if tags > 10:
-        viral_score += 10
-    elif tags > 5:
-        viral_score += 5
-    
-    # Random factors for demonstration
-    viral_score += random.randint(-10, 15)
-    viral_score = max(0, min(100, viral_score))
-    
-    # Determine viral potential
-    if viral_score >= 70:
-        viral_potential = "High"
-        viral_color = "🔥"
-    elif viral_score >= 50:
-        viral_potential = "Medium"
-        viral_color = "⚡"
-    else:
-        viral_potential = "Low"
-        viral_color = "❄️"
-    
-    # Beauty trend relevance (hardcoded based on common beauty keywords)
-    beauty_keywords = [
-        'makeup', 'beauty', 'skincare', 'tutorial', 'review', 'haul',
-        'routine', 'grwm', 'foundation', 'lipstick', 'eyeshadow',
-        'skincare routine', 'product review', 'beauty tips'
-    ]
-    
-    title_lower = metadata["title"].lower()
-    description_lower = metadata["description"].lower()
-    tags_lower = [tag.lower() for tag in metadata["tags"]]
-    
-    beauty_relevance = 0
-    for keyword in beauty_keywords:
-        if (keyword in title_lower or keyword in description_lower or 
-            any(keyword in tag for tag in tags_lower)):
-            beauty_relevance += 1
-    
-    beauty_score = min(100, (beauty_relevance / len(beauty_keywords)) * 100 + random.randint(0, 30))
-    
-    # Generate insights
-    insights = []
-    
-    if engagement_rate > 3:
-        insights.append("🎯 High engagement rate indicates strong audience connection")
-    if duration <= 60:
-        insights.append("⏱️ Short format optimized for social media virality")
-    if view_count > 500000:
-        insights.append("📈 Already showing strong traction in the market")
-    if beauty_score > 70:
-        insights.append("💄 High relevance to beauty trends and audience")
-    if len(metadata["tags"]) > 8:
-        insights.append("🏷️ Well-optimized with comprehensive tagging strategy")
-    
-    # Trend predictions
-    trend_categories = [
-        "Skincare Minimalism", "Bold Color Trends", "Sustainable Beauty",
-        "K-Beauty Influence", "Male Grooming", "Anti-Aging Innovation",
-        "Clean Beauty Movement", "DIY Beauty Hacks"
-    ]
-    
-    predicted_trend = random.choice(trend_categories)
-    trend_confidence = random.randint(60, 95)
+    # Simple heuristic scoring
+    viral_score = min(100, int(engagement_rate * 10 + (view_count / 10000)))
     
     return {
         "viral_score": viral_score,
-        "viral_potential": viral_potential,
-        "viral_color": viral_color,
-        "beauty_relevance_score": beauty_score,
+        "viral_potential": "Medium",
+        "viral_color": "⚡",
+        "beauty_relevance_score": 50,
         "engagement_rate": engagement_rate,
-        "likes_per_view": likes_per_view,
-        "comments_per_view": comments_per_view,
-        "insights": insights,
-        "predicted_trend": predicted_trend,
-        "trend_confidence": trend_confidence,
-        "recommended_actions": [
-            "Consider partnering with this creator for product placement",
-            "Analyze visual elements for campaign inspiration",
-            "Monitor comment sentiment for customer insights",
-            "Track performance metrics for trend validation"
-        ]
+        "likes_per_view": like_count / max(view_count, 1) * 100,
+        "comments_per_view": comment_count / max(view_count, 1) * 100,
+        "insights": ["⚠️ Using fallback prediction (ML models unavailable)"],
+        "predicted_trend": "General Beauty Content",
+        "trend_confidence": 60,
+        "recommended_actions": ["Check ML model availability for better predictions"]
     }
 
 def generate_posting_time_heatmap_data():
@@ -594,9 +633,47 @@ def main():
     # Sidebar controls
     st.sidebar.title("🔧 Controls")
     
-    # Load data with fixed directory
-    data_dir = os.path.join(os.path.dirname(__file__), "data")
-    data = load_data(data_dir)
+    # Web3 Data Source Selection
+    data_source = web3_manager.get_data_source_selector()
+    
+    # Show demo features
+    web3_manager.show_web3_demo_info()
+    
+    # Load data based on selected source
+    if data_source == "web3":
+        # Load from Web3/IPFS
+        data = {
+            'trends': web3_manager.load_data('top_trends_clean.csv', data_source),
+            'segments_labels': web3_manager.load_data('segments_labels.csv', data_source),
+            'segments_video': web3_manager.load_data('segments_video.csv', data_source),
+            'product_gaps': web3_manager.load_data('product_gaps.csv', data_source),
+            'categories': web3_manager.load_data('top_categories.csv', data_source),
+            'successful_products': web3_manager.load_data('successful_products.csv', data_source),
+            'supply_types': web3_manager.load_data('top_supply_types.csv', data_source),
+            'brands': web3_manager.load_data('top_brands.csv', data_source),
+            'trending_ingredients': web3_manager.load_data('trending_ingredients.csv', data_source),
+            'recommendations': web3_manager.load_data('beauty_innovation_recommendation.csv', data_source)
+        }
+    else:
+        # Load from local files or sample data
+        if data_source == "local":
+            data_dir = os.path.join(os.path.dirname(__file__), "data")
+            data = load_data(data_dir)
+        else:  # sample data
+            data = {
+                'trends': web3_manager.load_data('top_trends_clean.csv', data_source),
+                'segments_labels': web3_manager.load_data('segments_labels.csv', data_source),
+                'segments_video': web3_manager.load_data('segments_video.csv', data_source),
+                'product_gaps': web3_manager.load_data('product_gaps.csv', data_source),
+                'categories': web3_manager.load_data('top_categories.csv', data_source),
+                'successful_products': web3_manager.load_data('successful_products.csv', data_source),
+                'supply_types': web3_manager.load_data('top_supply_types.csv', data_source),
+                'brands': web3_manager.load_data('top_brands.csv', data_source),
+                'trending_ingredients': web3_manager.load_data('trending_ingredients.csv', data_source),
+                'recommendations': web3_manager.load_data('beauty_innovation_recommendation.csv', data_source)
+            }
+    
+
     
     # Global controls
     top_n = st.sidebar.slider("Top N for Charts", 5, 50, 20)
@@ -672,9 +749,6 @@ def main():
         
         if 'segments_labels' not in data and 'segments_video' not in data:
             st.error("Segments data not available. Please check if segment CSV files exist.")
-            return
-        
-        display_kpis(data, "Audience Segments")
         
         # Sub-tabs for different views
         seg_tabs = st.tabs(["💬 Comment-Level", "🎥 Video-Level"])
@@ -922,13 +996,11 @@ def main():
         Enter a YouTube URL to get viral predictions, beauty trend relevance, and marketing insights.
         """)
         
-        # Load API key securely from Streamlit secrets
-        # For local development, ensure you have a .streamlit/secrets.toml file
-        try:
-            API_KEY = st.secrets["YOUTUBE_API_KEY"]
-        except KeyError:
-            st.error("YouTube API key not found. Please add it to your Streamlit secrets.")
-            API_KEY = None
+        # Load API key from environment variables
+        API_KEY = os.getenv("YOUTUBE_API_KEY")
+        if not API_KEY:
+            st.error("YouTube API key not found. Please add YOUTUBE_API_KEY to your .env file.")
+            st.info("Create a .env file with: YOUTUBE_API_KEY=your_api_key_here")
         
         # Input section
         col1, col2 = st.columns([3, 1])
@@ -943,11 +1015,6 @@ def main():
         with col2:
             st.markdown("<br>", unsafe_allow_html=True)
             analyze_button = st.button("🔍 Analyze Video", type="primary")
-        
-        # Sample video for testing
-        if st.button("📝 Use Sample Video"):
-            video_url = "https://www.youtube.com/watch?v=tHiuBDhAOkQ"
-            st.success("Sample video loaded!")
         
         if video_url and analyze_button:
             video_id = extract_video_id(video_url)
@@ -993,7 +1060,7 @@ def main():
                         st.metric("Engagement Rate", f"{predictions['engagement_rate']:.2f}%")
                     
                     # Predictions section
-                    st.subheader("🔮 AI Predictions")
+                    st.subheader("🤖 ML Model Predictions")
                     
                     col1, col2, col3 = st.columns(3)
                     
@@ -1008,15 +1075,27 @@ def main():
                         st.metric(
                             "Beauty Relevance",
                             f"{predictions['beauty_relevance_score']:.0f}/100",
-                            "Beauty Industry Match"
+                            "ML Volume Score"
                         )
                     
                     with col3:
                         st.metric(
-                            "Trend Prediction",
-                            predictions['predicted_trend'],
+                            "Trend Stage",
+                            predictions.get('ml_stage', 'Unknown'),
                             f"{predictions['trend_confidence']}% confidence"
                         )
+                    
+                    # ML Model Details
+                    if 'ml_emerging_prob' in predictions:
+                        st.subheader("📊 ML Model Details")
+                        col1, col2, col3 = st.columns(3)
+                        
+                        with col1:
+                            st.metric("Emerging Probability", f"{predictions['ml_emerging_prob']:.3f}")
+                        with col2:
+                            st.metric("Volume Score", f"{predictions.get('ml_volume_score', 0):.3f}")
+                        with col3:
+                            st.metric("Stage Classification", predictions.get('ml_stage', 'N/A'))
                     
                     # Detailed insights
                     st.subheader("💡 Marketing Insights")
@@ -1132,7 +1211,12 @@ def main():
             
             **Step 4:** Export the analysis report for further use
             
-            **Note:** Predictions are generated using AI models trained on beauty industry data and social media trends.
+            **Note:** Predictions are generated using trained ML models (Logistic Regression + SGD Regressor) on beauty industry data and social media trends.
+            
+            **ML Models Used:**
+            - **Emerging Classifier**: Predicts viral potential (F1: 0.81)
+            - **Stage Classifier**: Identifies trend phase (Rising/Peaking/Decaying)
+            - **Volume Regressor**: Estimates engagement volume (RMSE: 0.114)
             """)
 
     # Heatmaps Tab

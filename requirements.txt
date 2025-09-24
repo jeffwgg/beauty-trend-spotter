@@ -1,0 +1,10 @@
+streamlit
+pandas
+plotly
+numpy
+google-api-python-client
+python-dotenv
+requests
+isodate
+joblib
+scikit-learn
