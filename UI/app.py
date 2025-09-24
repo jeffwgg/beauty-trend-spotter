@@ -12,6 +12,13 @@ import isodate
 import random
 import re
 from datetime import datetime, timedelta
+import requests
+from io import BytesIO
+from dotenv import load_dotenv
+
+# Load environment variables from .env file for local development
+load_dotenv()
+
 warnings.filterwarnings('ignore')
 
 # Page configuration
@@ -922,8 +929,13 @@ def main():
         Enter a YouTube URL to get viral predictions, beauty trend relevance, and marketing insights.
         """)
         
-        # API Key (hardcoded)
-        API_KEY = "AIzaSyBP0HwXe802_CC9tkO6Z19-nMrPQ_fU3AU"
+        # Load API key securely from Streamlit secrets
+        # For local development, ensure you have a .streamlit/secrets.toml file
+        try:
+            API_KEY = st.secrets["YOUTUBE_API_KEY"]
+        except KeyError:
+            st.error("YouTube API key not found. Please add it to your Streamlit secrets.")
+            API_KEY = None
         
         # Input section
         col1, col2 = st.columns([3, 1])
@@ -949,7 +961,10 @@ def main():
             
             if video_id:
                 with st.spinner("Fetching video data..."):
-                    metadata = get_youtube_metadata(video_id, API_KEY)
+                    if API_KEY:
+                        metadata = get_youtube_metadata(video_id, API_KEY)
+                    else:
+                        metadata = None
                 
                 if metadata:
                     # Generate predictions
