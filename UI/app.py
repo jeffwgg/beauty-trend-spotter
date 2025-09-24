@@ -64,7 +64,7 @@ st.markdown("""
 def load_data(data_dir: str) -> Dict[str, pd.DataFrame]:
     """Load all CSV files with caching and error handling"""
     data_files = {
-        'trends': 'top_trends_clean.csv',
+        'trends': 'refined_trends.csv',
         'segments_labels': 'segments_labels.csv',
         'segments_video': 'segments_video.csv',
         'product_gaps': 'product_gaps.csv',
@@ -363,47 +363,40 @@ def create_trend_charts(df: pd.DataFrame, top_n: int) -> List:
     if df.empty:
         return charts
     
-    # Chart 1: Top trends by strength
-    top_trends = df.nlargest(top_n, 'trend_strength')
+    # Prepare trend display data
+    df_display = df.copy()
+    if 'refined' in df_display.columns:
+        # Extract display name (before bracket) and hover text (in bracket)
+        df_display['display_name'] = df_display['refined'].str.extract(r'^([^(]+)')[0].str.strip()
+        df_display['hover_text'] = df_display['refined'].str.extract(r'\(([^)]+)\)')[0]
+        df_display['hover_text'] = df_display['hover_text'].fillna('')
+    else:
+        df_display['display_name'] = df_display.get('trend_name', 'Unknown')
+        df_display['hover_text'] = ''
+    
+    # Chart 1: Top trends by rank
+    top_trends = df_display.head(top_n)
     fig1 = px.bar(
-        top_trends.sort_values('trend_strength'),
-        x='trend_strength',
-        y='trend_name',
+        top_trends,
+        x='rank',
+        y='display_name',
         orientation='h',
-        title=f'Top {top_n} Trends by Strength',
-        hover_data=['n_videos', 'avg_composite_score', 'n_keywords', 'rank']
+        title=f'Top {top_n} Trends by Rank',
+        hover_data={'hover_text': True, 'rank': True} if 'hover_text' in top_trends.columns else ['rank']
     )
-    fig1.update_layout(height=400)
-    charts.append(("Trend Strength Analysis", fig1, "Higher trend strength indicates more viral potential and engagement."))
+    fig1.update_layout(height=400, xaxis_title='Rank', yaxis_title='Trend')
+    charts.append(("Top Trends", fig1, "Trends ranked by popularity and engagement."))
     
-    # Chart 2: Scatter plot with proper type conversion
-    df_subset = df.head(top_n).copy()
-    # Ensure numeric columns are properly converted
-    df_subset['n_keywords_num'] = pd.to_numeric(df_subset['n_keywords'], errors='coerce').fillna(1)
-    df_subset['rank_num'] = pd.to_numeric(df_subset['rank'], errors='coerce').fillna(1)
-    
-    fig2 = px.scatter(
-        df_subset,
-        x='avg_composite_score',
-        y='n_videos',
-        size='n_keywords_num',
-        color='rank_num',
-        hover_name='trend_name',
-        title='Trend Performance Matrix',
-        labels={'avg_composite_score': 'Average Composite Score', 'n_videos': 'Number of Videos'}
-    )
-    charts.append(("Performance Matrix", fig2, "Shows relationship between content quality and volume."))
-    
-    # Chart 3: Treemap
-    fig3 = px.treemap(
-        df.head(top_n),
-        path=['trend_name'],
-        values='total_composite_score',
-        color='avg_keyword_score',
-        title='Trends by Total Impact',
-        color_continuous_scale='Viridis'
-    )
-    charts.append(("Impact Treemap", fig3, "Visualizes total trend impact with keyword quality as color intensity."))
+    # Chart 2: Simple rank distribution
+    if len(top_trends) > 1:
+        fig2 = px.histogram(
+            top_trends,
+            x='rank',
+            title='Trend Rank Distribution',
+            nbins=min(20, len(top_trends))
+        )
+        fig2.update_layout(height=400, xaxis_title='Rank', yaxis_title='Count')
+        charts.append(("Rank Distribution", fig2, "Distribution of trend rankings."))
     
     return charts
 
@@ -574,11 +567,11 @@ def display_kpis(data: Dict[str, pd.DataFrame], page: str):
         with cols[0]:
             st.metric("Total Trends", len(df))
         with cols[1]:
-            st.metric("Total Videos", int(df['n_videos'].sum()) if 'n_videos' in df.columns else 0)
+            st.metric("Rank Range", f"1-{int(df['rank'].max()) if 'rank' in df.columns else 'N/A'}")
         with cols[2]:
-            st.metric("Avg Trend Strength", f"{df['trend_strength'].mean():.2f}" if 'trend_strength' in df.columns else "N/A")
+            st.metric("Refined Trends", len(df[df['refined'].notna()]) if 'refined' in df.columns else 0)
         with cols[3]:
-            st.metric("Top Rank", int(df['rank'].min()) if 'rank' in df.columns else "N/A")
+            st.metric("Original Trends", len(df[df['original'].notna()]) if 'original' in df.columns else 0)
     
     elif page == "Audience Segments":
         if 'segments_labels' in data:
@@ -617,7 +610,7 @@ def main():
         st.header("📈 Trendspotting Results")
         
         if 'trends' not in data:
-            st.error("Trends data not available. Please check if top_trends_clean.csv exists.")
+            st.error("Trends data not available. Please check if refined_trends.csv exists.")
             return
         
         df = data['trends'].copy()
@@ -627,23 +620,23 @@ def main():
         with st.expander("🎛️ Filters"):
             col1, col2 = st.columns(2)
             with col1:
-                min_videos = st.slider("Min Videos", 0, int(df['n_videos'].max()) if 'n_videos' in df.columns else 100, 0)
-                min_strength = st.slider("Min Trend Strength", 0.0, float(df['trend_strength'].max()) if 'trend_strength' in df.columns else 5.0, 0.0)
+                max_rank = st.slider("Max Rank", 1, int(df['rank'].max()) if 'rank' in df.columns else 50, int(df['rank'].max()) if 'rank' in df.columns else 50)
             with col2:
-                if 'trend_name' in df.columns:
-                    selected_trends = st.multiselect("Select Trends", df['trend_name'].unique())
-                keyword_filter = st.text_input("Keyword Filter", placeholder="Search in keywords...")
+                if 'refined' in df.columns:
+                    # Extract display names for selection
+                    display_names = df['refined'].str.extract(r'^([^(]+)')[0].str.strip().unique()
+                    selected_trends = st.multiselect("Select Trends", display_names)
+                keyword_filter = st.text_input("Keyword Filter", placeholder="Search in trends...")
         
         # Apply filters
-        if 'n_videos' in df.columns:
-            df = df[df['n_videos'] >= min_videos]
-        if 'trend_strength' in df.columns:
-            df = df[df['trend_strength'] >= min_strength]
-        if selected_trends:
-            df = df[df['trend_name'].isin(selected_trends)]
-        if keyword_filter:
-            if 'top_keywords' in df.columns:
-                df = df[df['top_keywords'].str.contains(keyword_filter, case=False, na=False)]
+        if 'rank' in df.columns:
+            df = df[df['rank'] <= max_rank]
+        if selected_trends and 'refined' in df.columns:
+            # Filter by display names
+            display_names_series = df['refined'].str.extract(r'^([^(]+)')[0].str.strip()
+            df = df[display_names_series.isin(selected_trends)]
+        if keyword_filter and 'refined' in df.columns:
+            df = df[df['refined'].str.contains(keyword_filter, case=False, na=False)]
         
         if df.empty:
             st.warning("No trends match the current filters. Try adjusting your criteria.")
@@ -662,7 +655,7 @@ def main():
                 display_df = df.head(100) if len(df) > 100 else df
                 if len(df) > 100:
                     st.info(f"Showing first 100 of {len(df)} rows. Use filters to refine results.")
-                st.dataframe(display_df, width='stretch')
+                st.dataframe(display_df, use_container_width=True)
                 
                 # Export
                 csv = df.to_csv(index=False)
@@ -707,7 +700,7 @@ def main():
                 charts = create_segment_charts(df_labels, pd.DataFrame(), top_n)
                 for title, fig, explanation in charts:
                     st.subheader(title)
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
                     st.caption(explanation)
                 
                 if show_tables:
@@ -716,7 +709,7 @@ def main():
                     display_df = df_labels.head(100) if len(df_labels) > 100 else df_labels
                     if len(df_labels) > 100:
                         st.info(f"Showing first 100 of {len(df_labels)} rows. Use filters to refine results.")
-                    st.dataframe(display_df, width='stretch')
+                    st.dataframe(display_df, use_container_width=True)
             else:
                 st.error("Comment-level segments data not available.")
         
@@ -734,7 +727,7 @@ def main():
                 charts = create_segment_charts(pd.DataFrame(), df_video, top_n)
                 for title, fig, explanation in charts:
                     st.subheader(title)
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
                     st.caption(explanation)
                 
                 if show_tables:
@@ -742,7 +735,7 @@ def main():
                     display_df = df_video.head(100) if len(df_video) > 100 else df_video
                     if len(df_video) > 100:
                         st.info(f"Showing first 100 of {len(df_video)} rows. Use filters to refine results.")
-                    st.dataframe(display_df, width='stretch')
+                    st.dataframe(display_df, use_container_width=True)
             else:
                 st.error("Video-level segments data not available.")
     
@@ -769,14 +762,14 @@ def main():
                 charts = create_external_insights_charts(data, top_n).get('product_gaps', [])
                 for title, fig, explanation in charts:
                     st.subheader(title)
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
                     st.caption(explanation)
                 
                 if show_tables:
                     display_df = df.head(50) if len(df) > 50 else df
                     if len(df) > 50:
                         st.info(f"Showing first 50 of {len(df)} rows.")
-                    st.dataframe(display_df, width='stretch')
+                    st.dataframe(display_df, use_container_width=True)
             else:
                 st.error("Product gaps data not available.")
         
@@ -787,13 +780,13 @@ def main():
                 st.subheader("Category Analysis")
                 charts = create_external_insights_charts(data, top_n).get('categories', [])
                 for title, fig, explanation in charts:
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
                     st.caption(explanation)
                 if show_tables:
                     display_df = df.head(50) if len(df) > 50 else df
                     if len(df) > 50:
                         st.info(f"Showing first 50 of {len(df)} rows.")
-                    st.dataframe(display_df, width='stretch')
+                    st.dataframe(display_df, use_container_width=True)
             else:
                 st.error("Categories data not available.")
     
@@ -897,20 +890,20 @@ def main():
                         hover_name='product_name',
                         title='Revenue vs Margin Analysis'
                     )
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
             
             with col2:
                 if 'roi_pct' in df.columns:
                     df['roi_pct'] = pd.to_numeric(df['roi_pct'], errors='coerce').fillna(0)
                     fig = px.histogram(df, x='roi_pct', title='ROI Distribution', nbins=10)
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
         
         if show_tables:
             st.subheader("📊 All Recommendations")
             display_df = df.head(50) if len(df) > 50 else df
             if len(df) > 50:
                 st.info(f"Showing first 50 of {len(df)} rows.")
-            st.dataframe(display_df, width='stretch')
+            st.dataframe(display_df, use_container_width=True)
             
             csv = df.to_csv(index=False)
             st.download_button(
