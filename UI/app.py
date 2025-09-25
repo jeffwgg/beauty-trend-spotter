@@ -643,7 +643,7 @@ def main():
     if data_source == "web3":
         # Load from Web3/IPFS
         data = {
-            'trends': web3_manager.load_data('top_trends_clean.csv', data_source),
+            'trends': web3_manager.load_data('refined_trends.csv', data_source),
             'segments_labels': web3_manager.load_data('segments_labels.csv', data_source),
             'segments_video': web3_manager.load_data('segments_video.csv', data_source),
             'product_gaps': web3_manager.load_data('product_gaps.csv', data_source),
@@ -661,7 +661,7 @@ def main():
             data = load_data(data_dir)
         else:  # sample data
             data = {
-                'trends': web3_manager.load_data('top_trends_clean.csv', data_source),
+                'trends': web3_manager.load_data('refined_trends.csv', data_source),
                 'segments_labels': web3_manager.load_data('segments_labels.csv', data_source),
                 'segments_video': web3_manager.load_data('segments_video.csv', data_source),
                 'product_gaps': web3_manager.load_data('product_gaps.csv', data_source),
@@ -699,10 +699,14 @@ def main():
             with col1:
                 max_rank = st.slider("Max Rank", 1, int(df['rank'].max()) if 'rank' in df.columns else 50, int(df['rank'].max()) if 'rank' in df.columns else 50)
             with col2:
+                selected_trends = []  # Initialize variable
                 if 'refined' in df.columns:
                     # Extract display names for selection
                     display_names = df['refined'].str.extract(r'^([^(]+)')[0].str.strip().unique()
                     selected_trends = st.multiselect("Select Trends", display_names)
+                elif 'trend_name' in df.columns:
+                    # Fallback to trend_name if refined not available
+                    selected_trends = st.multiselect("Select Trends", df['trend_name'].unique())
                 keyword_filter = st.text_input("Keyword Filter", placeholder="Search in trends...")
         
         # Apply filters
@@ -863,6 +867,75 @@ def main():
                     st.dataframe(display_df, use_container_width=True)
             else:
                 st.error("Categories data not available.")
+        
+        with insight_tabs[2]:  # Products
+            if 'successful_products' in data:
+                df = data['successful_products'].copy()
+                st.subheader("Successful Products Analysis")
+                
+                # KPIs
+                cols = st.columns(3)
+                with cols[0]:
+                    st.metric("Total Products", len(df))
+                with cols[1]:
+                    if 'rating' in df.columns:
+                        st.metric("Avg Rating", f"{df['rating'].mean():.2f}")
+                with cols[2]:
+                    if 'price' in df.columns:
+                        st.metric("Avg Price", f"${df['price'].mean():.2f}")
+                
+                if show_tables:
+                    st.dataframe(df.head(50), use_container_width=True)
+            else:
+                st.error("Successful products data not available.")
+        
+        with insight_tabs[3]:  # Supply Types
+            if 'supply_types' in data:
+                df = data['supply_types'].copy()
+                st.subheader("Supply Types Analysis")
+                
+                # Simple bar chart
+                if 'supply_type' in df.columns and 'count' in df.columns:
+                    fig = px.bar(df.head(top_n), x='count', y='supply_type', 
+                               orientation='h', title='Top Supply Types')
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                if show_tables:
+                    st.dataframe(df.head(50), use_container_width=True)
+            else:
+                st.error("Supply types data not available.")
+        
+        with insight_tabs[4]:  # Brands
+            if 'brands' in data:
+                df = data['brands'].copy()
+                st.subheader("Top Brands Analysis")
+                
+                # Simple bar chart
+                if 'brand' in df.columns and 'popularity' in df.columns:
+                    fig = px.bar(df.head(top_n), x='popularity', y='brand',
+                               orientation='h', title='Top Brands by Popularity')
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                if show_tables:
+                    st.dataframe(df.head(50), use_container_width=True)
+            else:
+                st.error("Brands data not available.")
+        
+        with insight_tabs[5]:  # Ingredients
+            if 'trending_ingredients' in data:
+                df = data['trending_ingredients'].copy()
+                st.subheader("Trending Ingredients Analysis")
+                
+                # Simple bar chart
+                if 'ingredient' in df.columns and 'trend_score' in df.columns:
+                    fig = px.bar(df.head(top_n), x='trend_score', y='ingredient',
+                               orientation='h', title='Top Trending Ingredients')
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                if show_tables:
+                    st.dataframe(df.head(50), use_container_width=True)
+            else:
+                st.error("Trending ingredients data not available.")
     
     # Recommendations Tab
     with tabs[3]:

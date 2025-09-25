@@ -21,7 +21,7 @@ class Web3DataManager:
         self.ipfs_cid = os.getenv("IPFS_CID", "bafybeiflrglvu2rrqy6a7ilgyx3k6dxsnfqldf45tyf4ijblyueh7j4y5a")
         self.ipfs_gateway = os.getenv("IPFS_GATEWAY", "https://w3s.link/ipfs")
         
-        # All your CSV files
+        # All your CSV files (matching local data structure)
         self.csv_files = [
             "beauty_innovation_recommendation.csv",
             "product_gaps.csv", 
@@ -31,7 +31,7 @@ class Web3DataManager:
             "top_brands.csv",
             "top_categories.csv",
             "top_supply_types.csv", 
-            "top_trends_clean.csv",
+            "refined_trends.csv",  # Changed from top_trends_clean.csv
             "trending_ingredients.csv"
         ]
         
@@ -66,7 +66,6 @@ class Web3DataManager:
             with st.sidebar.expander("ℹ️ Web3 Storage Info"):
                 st.write(f"**CID:** `{self.ipfs_cid[:12]}...`")
                 st.write(f"**Gateway:** {self.ipfs_gateway}")
-                st.write("**Cost:** $0 (Free)")
                 st.write("**Global Access:** ✅")
         elif source_type == "local":
             st.sidebar.info("📁 Using local CSV files")
@@ -200,6 +199,32 @@ class Web3DataManager:
                 'market_potential_score': ['High', 'Medium', 'High'],
                 'key_ingredients': ['Vitamin C, Niacinamide', 'Gentle Surfactants', 'Snail Mucin'],
                 'innovation_description': ['Revolutionary eco-friendly serum with 95% natural ingredients.', 'Ultra-gentle cleanser for sensitive skin.', 'K-beauty inspired essence with proven hydrating ingredients.']
+            })
+        elif "successful_products" in filename:
+            return pd.DataFrame({
+                'product_name': ['Glow Serum', 'Matte Foundation', 'Lip Balm'],
+                'brand': ['Brand A', 'Brand B', 'Brand C'],
+                'rating': [4.5, 4.2, 4.8],
+                'price': [29.99, 39.99, 12.99],
+                'category': ['Skincare', 'Makeup', 'Lip Care']
+            })
+        elif "supply_types" in filename:
+            return pd.DataFrame({
+                'supply_type': ['Online', 'Retail Store', 'Subscription'],
+                'count': [1500, 1200, 800],
+                'percentage': [42.9, 34.3, 22.9]
+            })
+        elif "brands" in filename:
+            return pd.DataFrame({
+                'brand': ['L\'Oréal', 'Maybelline', 'CeraVe'],
+                'popularity': [95, 88, 82],
+                'market_share': [25.5, 18.2, 12.8]
+            })
+        elif "trending_ingredients" in filename:
+            return pd.DataFrame({
+                'ingredient': ['Niacinamide', 'Hyaluronic Acid', 'Vitamin C'],
+                'trend_score': [95, 88, 85],
+                'mentions': [2500, 2100, 1900]
             })
         else:
             # Generic sample data
