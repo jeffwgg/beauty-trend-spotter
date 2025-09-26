@@ -12,14 +12,20 @@ import io
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from parent directory
-load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
+# Load environment variables from current directory
+load_dotenv()
 
 class Web3DataManager:
     def __init__(self):
         # Load IPFS configuration from environment variables
-        self.ipfs_cid = os.getenv("IPFS_CID", "bafybeiflrglvu2rrqy6a7ilgyx3k6dxsnfqldf45tyf4ijblyueh7j4y5a")
-        self.ipfs_gateway = os.getenv("IPFS_GATEWAY", "https://w3s.link/ipfs")
+        self.ipfs_cid = os.getenv("IPFS_CID")
+        self.ipfs_gateway = os.getenv("IPFS_GATEWAY")
+        
+        # Validate required environment variables
+        if not self.ipfs_cid:
+            raise ValueError("IPFS_CID environment variable is required")
+        if not self.ipfs_gateway:
+            raise ValueError("IPFS_GATEWAY environment variable is required")
         
         # All your CSV files (matching local data structure)
         self.csv_files = [
