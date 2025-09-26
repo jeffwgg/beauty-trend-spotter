@@ -8,3 +8,4 @@ requests
 isodate
 joblib
 scikit-learn
+python-dotenv
