@@ -626,15 +626,79 @@ def display_kpis(data: Dict[str, pd.DataFrame], page: str):
             with cols[3]:
                 st.metric("Avg Comments/Video", f"{df_video['total_comments'].mean():.1f}" if 'total_comments' in df_video.columns else "N/A")
 
+@st.dialog("🎆 Welcome to Beauty Insights Suite")
+def show_data_source_modal():
+    """Show data source selection modal on first visit"""
+    st.markdown("### 🚀 Choose Your Data Source")
+    
+    st.markdown("""
+    Select how you'd like to access the beauty analytics data:
+    """)
+    
+    # Data source options with descriptions
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("""
+        **🌐 Web3 Storage**
+        - Global IPFS access
+        - Latest data
+        - Zero cost
+        - Decentralized
+        """)
+        if st.button("🌐 Use Web3 Storage", use_container_width=True, type="primary"):
+            st.session_state.selected_data_source = "web3"
+            st.session_state.data_source_selected = True
+            st.rerun()
+    
+    with col2:
+        st.markdown("""
+        **💾 Local Files**
+        - Bundled CSV files
+        - Offline access
+        - Fast loading
+        - Reliable backup
+        """)
+        if st.button("💾 Use Local Files", use_container_width=True):
+            st.session_state.selected_data_source = "local"
+            st.session_state.data_source_selected = True
+            st.rerun()
+    
+    with col3:
+        st.markdown("""
+        **🎯 Sample Data**
+        - Demo dataset
+        - Quick preview
+        - No setup needed
+        - Testing mode
+        """)
+        if st.button("🎯 Use Sample Data", use_container_width=True):
+            st.session_state.selected_data_source = "sample"
+            st.session_state.data_source_selected = True
+            st.rerun()
+    
+    st.markdown("---")
+    st.caption("💡 **Tip:** You can change the data source anytime from the sidebar.")
+
 def main():
     st.title("🎨 Beauty Insights Suite")
     st.markdown("*Advanced Analytics for Beauty Trends, Segments & Innovation*")
     
+    # Initialize data source in session state
+    if 'data_source_selected' not in st.session_state:
+        st.session_state.data_source_selected = False
+        st.session_state.selected_data_source = None
+    
+    # Show data source selection modal on first visit
+    if not st.session_state.data_source_selected:
+        show_data_source_modal()
+        return  # Don't load the rest of the app until source is selected
+    
     # Sidebar controls
     st.sidebar.title("🔧 Controls")
     
-    # Web3 Data Source Selection
-    data_source = web3_manager.get_data_source_selector()
+    # Web3 Data Source Selection (now shows selected source)
+    data_source = st.session_state.selected_data_source
     
     # Show demo features
     web3_manager.show_web3_demo_info()

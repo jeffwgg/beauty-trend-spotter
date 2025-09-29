@@ -17,15 +17,9 @@ load_dotenv()
 
 class Web3DataManager:
     def __init__(self):
-        # Load IPFS configuration from environment variables
-        self.ipfs_cid = os.getenv("IPFS_CID")
-        self.ipfs_gateway = os.getenv("IPFS_GATEWAY")
-        
-        # Validate required environment variables
-        if not self.ipfs_cid:
-            raise ValueError("IPFS_CID environment variable is required")
-        if not self.ipfs_gateway:
-            raise ValueError("IPFS_GATEWAY environment variable is required")
+        # Load IPFS configuration from environment variables with fallbacks
+        self.ipfs_cid = os.getenv("IPFS_CID") or st.secrets.get("IPFS_CID", "bafybeigjxp5b4oe6wltppuyltmk35oohzpbh7qfsirwowmnwtnj7syqyzu")
+        self.ipfs_gateway = os.getenv("IPFS_GATEWAY") or st.secrets.get("IPFS_GATEWAY", "https://w3s.link/ipfs")
         
         # All your CSV files (matching local data structure)
         self.csv_files = [
@@ -52,19 +46,31 @@ class Web3DataManager:
         if 'web3_loading_info' not in st.session_state:
             st.session_state.web3_loading_info = []
     
-    def get_data_source_selector(self) -> str:
+    def get_data_source_selector(self, pre_selected=None) -> str:
         """Add data source selector to sidebar"""
         st.sidebar.markdown("---")
         st.sidebar.header("🌐 Data Source")
         
-        selected = st.sidebar.selectbox(
-            "Choose data source:",
-            list(self.data_sources.keys()),
-            index=0,  # Default to Web3
-            help="Web3: Global IPFS storage\nLocal: Bundled CSV files\nSample: Demo data"
-        )
-        
-        source_type = self.data_sources[selected]
+        if pre_selected:
+            # Show selected source and allow changing
+            source_names = {v: k for k, v in self.data_sources.items()}
+            current_name = source_names.get(pre_selected, "Unknown")
+            
+            st.sidebar.success(f"Selected: {current_name}")
+            
+            if st.sidebar.button("🔄 Change Data Source"):
+                st.session_state.data_source_selected = False
+                st.rerun()
+            
+            source_type = pre_selected
+        else:
+            selected = st.sidebar.selectbox(
+                "Choose data source:",
+                list(self.data_sources.keys()),
+                index=0,  # Default to Web3
+                help="Web3: Global IPFS storage\nLocal: Bundled CSV files\nSample: Demo data"
+            )
+            source_type = self.data_sources[selected]
         
         # Show source info
         if source_type == "web3":
