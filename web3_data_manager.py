@@ -51,28 +51,28 @@ class Web3DataManager:
         st.sidebar.markdown("---")
         st.sidebar.header("🌐 Data Source")
         
+        # Get current selection index
         if pre_selected:
-            # Show selected source and allow changing
             source_names = {v: k for k, v in self.data_sources.items()}
-            current_name = source_names.get(pre_selected, "Unknown")
-            
-            st.sidebar.success(f"**Current:** {current_name}")
-            
-            if st.sidebar.button("🔄 Change Data Source", type="primary"):
-                st.session_state.data_source_selected = False
-                st.rerun()
-            
-            st.sidebar.caption("💡 Click above to switch between Web3/Local/Sample data")
-            
-            source_type = pre_selected
+            current_name = source_names.get(pre_selected, list(self.data_sources.keys())[0])
+            current_index = list(self.data_sources.keys()).index(current_name)
         else:
-            selected = st.sidebar.selectbox(
-                "Choose data source:",
-                list(self.data_sources.keys()),
-                index=0,  # Default to Web3
-                help="Web3: Global IPFS storage\nLocal: Bundled CSV files\nSample: Demo data"
-            )
-            source_type = self.data_sources[selected]
+            current_index = 0
+        
+        # Always show selectbox for switching
+        selected = st.sidebar.selectbox(
+            "Choose data source:",
+            list(self.data_sources.keys()),
+            index=current_index,
+            help="Web3: Global IPFS storage\nLocal: Bundled CSV files\nSample: Demo data",
+            key="data_source_selector"
+        )
+        source_type = self.data_sources[selected]
+        
+        # If selection changed, update session state
+        if pre_selected and source_type != pre_selected:
+            st.session_state.selected_data_source = source_type
+            st.rerun()
         
         # Show source info
         if source_type == "web3":
