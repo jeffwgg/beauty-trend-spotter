@@ -56,11 +56,13 @@ class Web3DataManager:
             source_names = {v: k for k, v in self.data_sources.items()}
             current_name = source_names.get(pre_selected, "Unknown")
             
-            st.sidebar.success(f"Selected: {current_name}")
+            st.sidebar.success(f"**Current:** {current_name}")
             
-            if st.sidebar.button("🔄 Change Data Source"):
+            if st.sidebar.button("🔄 Change Data Source", type="primary"):
                 st.session_state.data_source_selected = False
                 st.rerun()
+            
+            st.sidebar.caption("💡 Click above to switch between Web3/Local/Sample data")
             
             source_type = pre_selected
         else:
