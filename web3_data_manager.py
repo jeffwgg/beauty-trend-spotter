@@ -83,6 +83,10 @@ class Web3DataManager:
                 st.write(f"**CID:** `{self.ipfs_cid[:12]}...`")
                 st.write(f"**Gateway:** {self.ipfs_gateway}")
                 st.write("**Global Access:** ✅")
+            
+            # Add button to show loading details
+            if st.sidebar.button("📈 View Loading Details"):
+                self.show_loading_details_modal()
         elif source_type == "local":
             st.sidebar.info("📁 Using local CSV files")
         else:
@@ -90,8 +94,25 @@ class Web3DataManager:
             
         return source_type
     
+    @st.dialog("🌐 Web3 Loading Details")
+    def show_loading_details_modal(self):
+        """Show Web3 loading details in modal"""
+        if 'web3_loading_info' in st.session_state and st.session_state.web3_loading_info:
+            st.markdown("### 📈 Loading Summary")
+            
+            for info in st.session_state.web3_loading_info:
+                if info['status'] == 'success':
+                    st.success(f"✅ **{info['filename']}** - {info['rows']} rows ({info['load_time']:.2f}s)")
+                    st.code(info['url'], language="text")
+                else:
+                    st.error(f"❌ **{info['filename']}** - {info.get('error', 'Failed')}")
+                    st.code(info['url'], language="text")
+                st.markdown("---")
+        else:
+            st.info("No Web3 loading information available.")
+    
     def preload_web3_data(self) -> Dict[str, pd.DataFrame]:
-        """Preload all Web3 data with detailed progress indicator"""
+        """Preload all Web3 data with simple progress indicator"""
         data = {}
         
         # File mapping for data loading
@@ -108,64 +129,27 @@ class Web3DataManager:
             'recommendations': 'beauty_innovation_recommendation.csv'
         }
         
-        # Create progress bar and status containers
+        # Clear previous loading info
+        st.session_state.web3_loading_info = []
+        
+        # Create progress bar
         progress_bar = st.progress(0)
-        status_container = st.container()
+        status_text = st.empty()
         
         total_files = len(file_mapping)
         
-        with status_container:
-            st.markdown("### 🌐 Web3 Loading Details")
-            details_placeholder = st.empty()
-        
-        loading_details = []
-        
         for i, (key, filename) in enumerate(file_mapping.items()):
-            url = f"{self.ipfs_gateway}/{self.ipfs_cid}/{filename}"
-            
-            # Update current loading status
-            current_status = f"🔄 Loading: **{filename}**\n\n🔗 URL: `{url}`"
-            
-            # Add previous results
-            if loading_details:
-                current_status += "\n\n---\n\n**Previous Files:**\n\n"
-                for detail in loading_details[-3:]:  # Show last 3
-                    current_status += detail + "\n\n"
-            
-            details_placeholder.markdown(current_status)
-            
-            # Load the data
-            start_time = time.time()
+            status_text.text(f"🌐 Loading {filename}...")
             data[key] = self.load_data(filename, "web3")
-            load_time = time.time() - start_time
-            
-            # Determine status
-            if data[key] is not None:
-                rows = len(data[key])
-                status_icon = "✅"
-                status_text = f"Success ({rows} rows, {load_time:.2f}s)"
-            else:
-                status_icon = "❌"
-                status_text = f"Failed ({load_time:.2f}s)"
-            
-            # Add to loading details
-            loading_details.append(
-                f"{status_icon} **{filename}** - {status_text}\n🔗 `{url}`"
-            )
-            
             progress_bar.progress((i + 1) / total_files)
         
-        # Show final summary
-        final_summary = "### ✅ Loading Complete!\n\n**All Files:**\n\n"
-        for detail in loading_details:
-            final_summary += detail + "\n\n"
-        
-        details_placeholder.markdown(final_summary)
+        status_text.text("✅ All data loaded successfully!")
         st.session_state.web3_data_loaded = True
         
-        # Clear progress bar after delay
-        time.sleep(2)
+        # Clear progress indicators
+        time.sleep(1)
         progress_bar.empty()
+        status_text.empty()
         
         return data
     
