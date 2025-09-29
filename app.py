@@ -790,7 +790,7 @@ def main():
             charts = create_trend_charts(df, top_n)
             for title, fig, explanation in charts:
                 st.subheader(title)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
                 st.caption(explanation)
             
             # Data table
