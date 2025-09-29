@@ -698,7 +698,7 @@ def main():
     st.sidebar.title("🔧 Controls")
     
     # Web3 Data Source Selection (now shows selected source)
-    data_source = web3_manager.get_data_source_selector(st.session_state.selected_data_source)
+    data_source = st.session_state.selected_data_source
     
     # Show demo features
     web3_manager.show_web3_demo_info()
