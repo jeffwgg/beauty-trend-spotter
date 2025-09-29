@@ -141,7 +141,27 @@ class Web3DataManager:
         
         for i, (key, filename) in enumerate(file_mapping.items()):
             status_text.text(f"🌐 Loading {filename}...")
+            
+            # Load data and capture loading info
+            start_time = time.time()
             data[key] = self.load_data(filename, "web3")
+            load_time = time.time() - start_time
+            
+            # Ensure loading info is captured
+            url = f"{self.ipfs_gateway}/{self.ipfs_cid}/{filename}"
+            if data[key] is not None:
+                # Check if this file info already exists
+                existing = any(info['filename'] == filename for info in st.session_state.web3_loading_info)
+                if not existing:
+                    st.session_state.web3_loading_info.append({
+                        'filename': filename,
+                        'url': url,
+                        'rows': len(data[key]),
+                        'columns': len(data[key].columns),
+                        'load_time': load_time,
+                        'status': 'success'
+                    })
+            
             progress_bar.progress((i + 1) / total_files)
         
         status_text.text("✅ All data loaded successfully!")
