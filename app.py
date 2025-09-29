@@ -756,6 +756,11 @@ def main():
         st.session_state.web3_data_loaded = False
         st.rerun()
     
+    # Show Web3 loading details button if using Web3
+    if data_source == "web3" and st.session_state.get('web3_data_loaded', False):
+        if st.sidebar.button("📈 View Loading Details"):
+            web3_manager.show_loading_details_modal()
+    
     # Global controls
     top_n = st.sidebar.slider("Top N for Charts", 5, 50, 20)
     show_tables = st.sidebar.toggle("Show Data Tables", value=True)
