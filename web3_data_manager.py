@@ -129,8 +129,9 @@ class Web3DataManager:
             'recommendations': 'beauty_innovation_recommendation.csv'
         }
         
-        # Clear previous loading info
-        st.session_state.web3_loading_info = []
+        # Don't clear loading info if it already exists (for cached loads)
+        if not st.session_state.web3_loading_info:
+            st.session_state.web3_loading_info = []
         
         # Create progress bar
         progress_bar = st.progress(0)
