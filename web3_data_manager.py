@@ -112,7 +112,7 @@ class Web3DataManager:
             st.info("No Web3 loading information available.")
     
     def preload_web3_data(self) -> Dict[str, pd.DataFrame]:
-        """Preload all Web3 data with simple progress indicator"""
+        """Preload all Web3 data directly from IPFS with detailed loading info"""
         data = {}
         
         # File mapping for data loading
@@ -129,9 +129,8 @@ class Web3DataManager:
             'recommendations': 'beauty_innovation_recommendation.csv'
         }
         
-        # Initialize loading info if not exists
-        if 'web3_loading_info' not in st.session_state:
-            st.session_state.web3_loading_info = []
+        # Clear and initialize loading info
+        st.session_state.web3_loading_info = []
         
         # Create progress bar
         progress_bar = st.progress(0)
@@ -140,27 +139,12 @@ class Web3DataManager:
         total_files = len(file_mapping)
         
         for i, (key, filename) in enumerate(file_mapping.items()):
-            status_text.text(f"🌐 Loading {filename}...")
+            status_text.text(f"🌐 Loading {filename} from IPFS...")
             
-            # Load data and capture loading info
+            # Load directly from Web3 (no cache)
             start_time = time.time()
-            data[key] = self.load_data(filename, "web3")
+            data[key] = self._load_from_web3_direct(filename)
             load_time = time.time() - start_time
-            
-            # Ensure loading info is captured
-            url = f"{self.ipfs_gateway}/{self.ipfs_cid}/{filename}"
-            if data[key] is not None:
-                # Check if this file info already exists
-                existing = any(info['filename'] == filename for info in st.session_state.web3_loading_info)
-                if not existing:
-                    st.session_state.web3_loading_info.append({
-                        'filename': filename,
-                        'url': url,
-                        'rows': len(data[key]),
-                        'columns': len(data[key].columns),
-                        'load_time': load_time,
-                        'status': 'success'
-                    })
             
             progress_bar.progress((i + 1) / total_files)
         
@@ -173,6 +157,44 @@ class Web3DataManager:
         status_text.empty()
         
         return data
+    
+    def _load_from_web3_direct(self, filename: str) -> Optional[pd.DataFrame]:
+        """Load CSV directly from IPFS without caching"""
+        try:
+            url = f"{self.ipfs_gateway}/{self.ipfs_cid}/{filename}"
+            
+            start_time = time.time()
+            response = requests.get(url, timeout=30)
+            response.raise_for_status()
+            
+            df = pd.read_csv(io.StringIO(response.text))
+            load_time = time.time() - start_time
+            
+            # Store loading info
+            st.session_state.web3_loading_info.append({
+                'filename': filename,
+                'url': url,
+                'rows': len(df),
+                'columns': len(df.columns),
+                'load_time': load_time,
+                'status': 'success'
+            })
+            
+            return df
+            
+        except Exception as e:
+            load_time = time.time() - start_time if 'start_time' in locals() else 0
+            
+            # Store error info
+            st.session_state.web3_loading_info.append({
+                'filename': filename,
+                'url': f"{self.ipfs_gateway}/{self.ipfs_cid}/{filename}",
+                'error': str(e),
+                'load_time': load_time,
+                'status': 'error'
+            })
+            
+            return self._load_from_local(filename)
     
     @st.cache_data(ttl=300)  # Cache for 5 minutes
     def load_data(_self, filename: str, source: str = "web3") -> Optional[pd.DataFrame]:
