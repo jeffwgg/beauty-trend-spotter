@@ -694,14 +694,8 @@ def main():
         show_data_source_modal()
         return  # Don't load the rest of the app until source is selected
     
-    # Sidebar controls
-    st.sidebar.title("🔧 Controls")
-    
-    # Web3 Data Source Selection (now shows selected source)
+    # Get selected data source
     data_source = st.session_state.selected_data_source
-    
-    # Show demo features
-    web3_manager.show_web3_demo_info()
     
     # Load data based on selected source
     if data_source == "web3":
@@ -746,7 +740,21 @@ def main():
     if data_source == "web3" and not st.session_state.get('web3_data_loaded', False):
         st.stop()
     
-
+    # Show sidebar controls only after data is loaded
+    st.sidebar.title("🔧 Controls")
+    
+    # Data source info
+    source_names = {
+        "web3": "🌐 Web3 Storage",
+        "local": "💾 Local Files", 
+        "sample": "🎯 Sample Data"
+    }
+    st.sidebar.success(f"**Source:** {source_names.get(data_source, 'Unknown')}")
+    
+    if st.sidebar.button("🔄 Change Data Source", type="primary"):
+        st.session_state.data_source_selected = False
+        st.session_state.web3_data_loaded = False
+        st.rerun()
     
     # Global controls
     top_n = st.sidebar.slider("Top N for Charts", 5, 50, 20)
