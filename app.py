@@ -705,19 +705,24 @@ def main():
     
     # Load data based on selected source
     if data_source == "web3":
-        # Load from Web3/IPFS
-        data = {
-            'trends': web3_manager.load_data('refined_trends.csv', data_source),
-            'segments_labels': web3_manager.load_data('segments_labels.csv', data_source),
-            'segments_video': web3_manager.load_data('segments_video.csv', data_source),
-            'product_gaps': web3_manager.load_data('product_gaps.csv', data_source),
-            'categories': web3_manager.load_data('top_categories.csv', data_source),
-            'successful_products': web3_manager.load_data('successful_products.csv', data_source),
-            'supply_types': web3_manager.load_data('top_supply_types.csv', data_source),
-            'brands': web3_manager.load_data('top_brands.csv', data_source),
-            'trending_ingredients': web3_manager.load_data('trending_ingredients.csv', data_source),
-            'recommendations': web3_manager.load_data('beauty_innovation_recommendation.csv', data_source)
-        }
+        # Check if Web3 data is already loaded
+        if not st.session_state.get('web3_data_loaded', False):
+            st.info("🌐 Loading Web3 data from IPFS... Please wait.")
+            data = web3_manager.preload_web3_data()
+        else:
+            # Load from Web3/IPFS (cached)
+            data = {
+                'trends': web3_manager.load_data('refined_trends.csv', data_source),
+                'segments_labels': web3_manager.load_data('segments_labels.csv', data_source),
+                'segments_video': web3_manager.load_data('segments_video.csv', data_source),
+                'product_gaps': web3_manager.load_data('product_gaps.csv', data_source),
+                'categories': web3_manager.load_data('top_categories.csv', data_source),
+                'successful_products': web3_manager.load_data('successful_products.csv', data_source),
+                'supply_types': web3_manager.load_data('top_supply_types.csv', data_source),
+                'brands': web3_manager.load_data('top_brands.csv', data_source),
+                'trending_ingredients': web3_manager.load_data('trending_ingredients.csv', data_source),
+                'recommendations': web3_manager.load_data('beauty_innovation_recommendation.csv', data_source)
+            }
     else:
         # Load from local files or sample data
         if data_source == "local":
@@ -736,6 +741,10 @@ def main():
                 'trending_ingredients': web3_manager.load_data('trending_ingredients.csv', data_source),
                 'recommendations': web3_manager.load_data('beauty_innovation_recommendation.csv', data_source)
             }
+    
+    # Don't show interface until Web3 data is loaded
+    if data_source == "web3" and not st.session_state.get('web3_data_loaded', False):
+        st.stop()
     
 
     

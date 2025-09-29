@@ -45,6 +45,8 @@ class Web3DataManager:
         # Initialize session state for loading info
         if 'web3_loading_info' not in st.session_state:
             st.session_state.web3_loading_info = []
+        if 'web3_data_loaded' not in st.session_state:
+            st.session_state.web3_data_loaded = False
     
     def get_data_source_selector(self, pre_selected=None) -> str:
         """Add data source selector to sidebar"""
@@ -87,6 +89,45 @@ class Web3DataManager:
             st.sidebar.warning("🎯 Using demo data")
             
         return source_type
+    
+    def preload_web3_data(self) -> Dict[str, pd.DataFrame]:
+        """Preload all Web3 data with progress indicator"""
+        data = {}
+        
+        # File mapping for data loading
+        file_mapping = {
+            'trends': 'refined_trends.csv',
+            'segments_labels': 'segments_labels.csv',
+            'segments_video': 'segments_video.csv',
+            'product_gaps': 'product_gaps.csv',
+            'categories': 'top_categories.csv',
+            'successful_products': 'successful_products.csv',
+            'supply_types': 'top_supply_types.csv',
+            'brands': 'top_brands.csv',
+            'trending_ingredients': 'trending_ingredients.csv',
+            'recommendations': 'beauty_innovation_recommendation.csv'
+        }
+        
+        # Create progress bar
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        total_files = len(file_mapping)
+        
+        for i, (key, filename) in enumerate(file_mapping.items()):
+            status_text.text(f"Loading {filename}...")
+            data[key] = self.load_data(filename, "web3")
+            progress_bar.progress((i + 1) / total_files)
+        
+        status_text.text("✅ All data loaded successfully!")
+        st.session_state.web3_data_loaded = True
+        
+        # Clear progress indicators after a short delay
+        time.sleep(1)
+        progress_bar.empty()
+        status_text.empty()
+        
+        return data
     
     @st.cache_data(ttl=300)  # Cache for 5 minutes
     def load_data(_self, filename: str, source: str = "web3") -> Optional[pd.DataFrame]:
