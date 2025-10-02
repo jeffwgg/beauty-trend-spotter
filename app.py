@@ -1208,11 +1208,11 @@ def main():
             else:
                 st.metric("Avg Margin", "N/A")
         with cols[3]:
-            if 'market_potential_score' in df.columns:
-                high_potential = len(df[df['market_potential_score'] == 'High'])
-                st.metric("High Potential", high_potential)
+            if 'investment_recommendation' in df.columns:
+                recommended_count = len(df[df['investment_recommendation'].str.contains('Recommended', na=False)])
+                st.metric("Recommended", recommended_count)
             else:
-                st.metric("High Potential", "N/A")
+                st.metric("Recommended", "N/A")
         
         # Product cards (limit to prevent memory issues)
         if not df.empty:
@@ -1254,9 +1254,9 @@ def main():
                     with col3:
                         break_even = pd.to_numeric(row.get('break_even_months', 0), errors='coerce')
                         st.metric("Break-even", f"{break_even:.1f} mo")
-                        potential = row.get('market_potential_score', 'Unknown')
-                        color = "green" if potential == "High" else "orange" if potential == "Medium" else "red"
-                        st.markdown(f"<span style='color: {color};'>{potential} Potential</span>", unsafe_allow_html=True)
+                        recommendation = row.get('investment_recommendation', 'Unknown')
+                        color = "green" if "Recommended" in recommendation else "red"
+                        st.markdown(f"<span style='color: {color};'>{recommendation}</span>", unsafe_allow_html=True)
         
         # Charts
         if not df.empty and len(df) > 1:
