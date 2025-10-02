@@ -402,8 +402,8 @@ def create_trend_charts(df: pd.DataFrame, top_n: int, top_trends_data: pd.DataFr
     
     # Use top_trends_clean data if available, otherwise fall back to original
     if top_trends_data is not None and not top_trends_data.empty:
-            # Sort by total_composite_score in ascending order (reverse order)
-        df_display = top_trends_data.sort_values('total_composite_score', ascending=True).copy()
+            # Sort by total_composite_score in descending order (high to low)
+        df_display = top_trends_data.sort_values('total_composite_score', ascending=False).copy()
         
         # Prepare display data
         df_display['display_name'] = df_display['trend_name']
