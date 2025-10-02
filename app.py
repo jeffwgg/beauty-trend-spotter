@@ -402,8 +402,8 @@ def create_trend_charts(df: pd.DataFrame, top_n: int, top_trends_data: pd.DataFr
     
     # Use top_trends_clean data if available, otherwise fall back to original
     if top_trends_data is not None and not top_trends_data.empty:
-        # Sort by total_composite_score in descending order (higher scores = better trends)
-        df_display = top_trends_data.sort_values('total_composite_score', ascending=False).copy()
+            # Sort by total_composite_score in ascending order (reverse order)
+        df_display = top_trends_data.sort_values('total_composite_score', ascending=True).copy()
         
         # Prepare display data
         df_display['display_name'] = df_display['trend_name']
@@ -916,6 +916,49 @@ def main():
             if 'segments_labels' in data:
                 df_labels = data['segments_labels'].copy()
                 
+                # Popular Discussions Mock Display
+                st.subheader("💬 Popular Discussions by Segment")
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.markdown("**Gen Z Comments:**")
+                    genz_comments = [
+                        "'This is giving main character energy! 💅'",
+                        "'No cap, this routine is fire 🔥'", 
+                        "'Periodt! Need this in my life rn'",
+                        "'Bestie spilled the tea ☕'",
+                        "'It's giving expensive but make it affordable'"
+                    ]
+                    for comment in genz_comments:
+                        st.caption(comment)
+                
+                with col2:
+                    st.markdown("**Millennial Comments:**")
+                    millennial_comments = [
+                        "'Finally found my holy grail product!'",
+                        "'This takes me back to the 2000s vibes'",
+                        "'Perfect for my busy mom life routine'", 
+                        "'Investing in quality skincare pays off'",
+                        "'Classic look that never goes out of style'"
+                    ]
+                    for comment in millennial_comments:
+                        st.caption(comment)
+                
+                with col3:
+                    st.markdown("**Interest-Based:**")
+                    interest_comments = [
+                        "'Love the ingredient breakdown! 🧪'",
+                        "'Can you do a tutorial on this?'",
+                        "'What's the pH level of this product?'",
+                        "'Dermatologist-approved ingredients'",
+                        "'Science-backed beauty is the future'"
+                    ]
+                    for comment in interest_comments:
+                        st.caption(comment)
+                
+                st.markdown("---")
+                
                 # Filters
                 with st.expander("🎛️ Filters"):
                     col1, col2 = st.columns(2)
@@ -949,6 +992,37 @@ def main():
         with seg_tabs[1]:
             if 'segments_video' in data:
                 df_video = data['segments_video'].copy()
+                
+                # Top Trends & Discussions Mock Display
+                st.subheader("🔥 Top Trends by Segment")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown("**Gen Z Trending Topics:**")
+                    genz_trends = [
+                        "🌟 Glass Skin Routine - 2.3M views",
+                        "💄 Clean Girl Makeup - 1.8M views", 
+                        "🧴 Skinimalism - 1.5M views",
+                        "✨ Dewy Glow Look - 1.2M views",
+                        "🌱 Sustainable Beauty - 980K views"
+                    ]
+                    for trend in genz_trends:
+                        st.markdown(f"• {trend}")
+                
+                with col2:
+                    st.markdown("**Millennial Hot Discussions:**")
+                    millennial_trends = [
+                        "🔬 Anti-Aging Serums - 1.9M views",
+                        "💋 Bold Lip Colors - 1.6M views",
+                        "👁️ Eye Cream Reviews - 1.4M views", 
+                        "🌙 Night Skincare - 1.1M views",
+                        "💅 Nail Art Trends - 850K views"
+                    ]
+                    for trend in millennial_trends:
+                        st.markdown(f"• {trend}")
+                
+                st.markdown("---")
                 
                 # Filters
                 with st.expander("🎛️ Filters"):
@@ -1119,11 +1193,11 @@ def main():
             else:
                 st.metric("Avg Margin", "N/A")
         with cols[3]:
-            if 'investment_recommendation' in df.columns:
-                recommended_count = len(df[df['investment_recommendation'] == 'Recommended'])
-                st.metric("Recommended", recommended_count)
+            if 'market_potential_score' in df.columns:
+                high_potential = len(df[df['market_potential_score'] == 'High'])
+                st.metric("High Potential", high_potential)
             else:
-                st.metric("Recommended", "N/A")
+                st.metric("High Potential", "N/A")
         
         # Product cards (limit to prevent memory issues)
         if not df.empty:
@@ -1165,9 +1239,9 @@ def main():
                     with col3:
                         break_even = pd.to_numeric(row.get('break_even_months', 0), errors='coerce')
                         st.metric("Break-even", f"{break_even:.1f} mo")
-                        recommendation = row.get('investment_recommendation', 'Unknown')
-                        color = "green" if recommendation == "Recommended" else "red"
-                        st.markdown(f"<span style='color: {color};'>{recommendation}</span>", unsafe_allow_html=True)
+                        potential = row.get('market_potential_score', 'Unknown')
+                        color = "green" if potential == "High" else "orange" if potential == "Medium" else "red"
+                        st.markdown(f"<span style='color: {color};'>{potential} Potential</span>", unsafe_allow_html=True)
         
         # Charts
         if not df.empty and len(df) > 1:
@@ -1301,9 +1375,9 @@ def main():
                     
                     with col2:
                         st.metric(
-                            "Beauty Relevance",
-                            f"{predictions['beauty_relevance_score']:.0f}/100",
-                            "ML Volume Score"
+                            "Trend Confidence",
+                            f"{predictions['trend_confidence']}%",
+                            "ML Confidence"
                         )
                     
                     with col3:
@@ -1366,8 +1440,8 @@ def main():
                     
                     # Prediction confidence chart
                     scores_data = {
-                        'Category': ['Viral Score', 'Beauty Relevance', 'Trend Confidence'],
-                        'Score': [predictions['viral_score'], predictions['beauty_relevance_score'], predictions['trend_confidence']]
+                        'Category': ['Viral Score', 'Trend Confidence'],
+                        'Score': [predictions['viral_score'], predictions['trend_confidence']]
                     }
                     
                     fig_scores = px.bar(
@@ -1403,7 +1477,6 @@ def main():
                         'Comments': [metadata['commentCount']],
                         'Viral_Score': [predictions['viral_score']],
                         'Viral_Potential': [predictions['viral_potential']],
-                        'Beauty_Relevance': [predictions['beauty_relevance_score']],
                         'Predicted_Trend': [predictions['predicted_trend']],
                         'Engagement_Rate': [predictions['engagement_rate']],
                         'Analysis_Date': [datetime.now().strftime('%Y-%m-%d %H:%M:%S')]
