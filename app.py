@@ -694,34 +694,97 @@ def display_kpis(data: Dict[str, pd.DataFrame], page: str):
             with cols[3]:
                 st.metric("Avg Comments/Video", f"{df_video['total_comments'].mean():.1f}" if 'total_comments' in df_video.columns else "N/A")
 
+@st.dialog("🎆 Welcome to Beauty Insights Suite")
+def show_data_source_modal():
+    """Show data source selection modal on first visit"""
+    st.markdown("### 🚀 Choose Your Data Source")
+    
+    st.markdown("""
+    Select how you'd like to access the beauty analytics data:
+    """)
+    
+    # Data source options with descriptions
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("""
+        **🌐 Web3 Storage**
+        - Global IPFS access
+        - Latest data
+        - Zero cost
+        - Decentralized
+        """)
+        if st.button("🌐 Use Web3 Storage", use_container_width=True, type="primary"):
+            st.session_state.selected_data_source = "web3"
+            st.session_state.data_source_selected = True
+            st.rerun()
+    
+    with col2:
+        st.markdown("""
+        **💾 Local Files**
+        - Bundled CSV files
+        - Offline access
+        - Fast loading
+        - Reliable backup
+        """)
+        if st.button("💾 Use Local Files", use_container_width=True):
+            st.session_state.selected_data_source = "local"
+            st.session_state.data_source_selected = True
+            st.rerun()
+    
+    with col3:
+        st.markdown("""
+        **🎯 Sample Data**
+        - Demo dataset
+        - Quick preview
+        - No setup needed
+        - Testing mode
+        """)
+        if st.button("🎯 Use Sample Data", use_container_width=True):
+            st.session_state.selected_data_source = "sample"
+            st.session_state.data_source_selected = True
+            st.rerun()
+    
+    st.markdown("---")
+    st.caption("💡 **Tip:** You can change the data source anytime from the sidebar.")
+
 def main():
     st.title("🎨 Beauty Insights Suite")
     st.markdown("*Advanced Analytics for Beauty Trends, Segments & Innovation*")
     
-    # Sidebar controls
-    st.sidebar.title("🔧 Controls")
+    # Initialize data source in session state
+    if 'data_source_selected' not in st.session_state:
+        st.session_state.data_source_selected = False
+        st.session_state.selected_data_source = None
     
-    # Web3 Data Source Selection
-    data_source = web3_manager.get_data_source_selector()
+    # Show data source selection modal on first visit
+    if not st.session_state.data_source_selected:
+        show_data_source_modal()
+        return  # Don't load the rest of the app until source is selected
     
-    # Show demo features
-    web3_manager.show_web3_demo_info()
+    # Get selected data source
+    data_source = st.session_state.selected_data_source
     
     # Load data based on selected source
     if data_source == "web3":
-        # Load from Web3/IPFS
-        data = {
-            'trends': web3_manager.load_data('refined_trends.csv', data_source),
-            'segments_labels': web3_manager.load_data('segments_labels.csv', data_source),
-            'segments_video': web3_manager.load_data('segments_video.csv', data_source),
-            'product_gaps': web3_manager.load_data('product_gaps.csv', data_source),
-            'categories': web3_manager.load_data('top_categories.csv', data_source),
-            'successful_products': web3_manager.load_data('successful_products.csv', data_source),
-            'supply_types': web3_manager.load_data('top_supply_types.csv', data_source),
-            'brands': web3_manager.load_data('top_brands.csv', data_source),
-            'trending_ingredients': web3_manager.load_data('trending_ingredients.csv', data_source),
-            'recommendations': web3_manager.load_data('beauty_innovation_recommendation.csv', data_source)
-        }
+        # Check if Web3 data is already loaded
+        if not st.session_state.get('web3_data_loaded', False):
+            st.info("🌐 Loading Web3 data from IPFS... Please wait.")
+            data = web3_manager.preload_web3_data()
+        else:
+            # Load from Web3/IPFS (cached)
+            data = {
+                'trends': web3_manager.load_data('refined_trends.csv', data_source),
+                'segments_labels': web3_manager.load_data('segments_labels.csv', data_source),
+                'segments_video': web3_manager.load_data('segments_video.csv', data_source),
+                'product_gaps': web3_manager.load_data('product_gaps.csv', data_source),
+                'categories': web3_manager.load_data('top_categories.csv', data_source),
+                'successful_products': web3_manager.load_data('successful_products.csv', data_source),
+                'supply_types': web3_manager.load_data('top_supply_types.csv', data_source),
+                'brands': web3_manager.load_data('top_brands.csv', data_source),
+                'trending_ingredients': web3_manager.load_data('trending_ingredients.csv', data_source),
+                'recommendations': web3_manager.load_data('beauty_innovation_recommendation.csv', data_source)
+            }
     else:
         # Load from local files or sample data
         if data_source == "local":
@@ -741,7 +804,30 @@ def main():
                 'recommendations': web3_manager.load_data('beauty_innovation_recommendation.csv', data_source)
             }
     
-
+    # Don't show interface until Web3 data is loaded
+    if data_source == "web3" and not st.session_state.get('web3_data_loaded', False):
+        st.stop()
+    
+    # Show sidebar controls only after data is loaded
+    st.sidebar.title("🔧 Controls")
+    
+    # Data source info
+    source_names = {
+        "web3": "🌐 Web3 Storage",
+        "local": "💾 Local Files", 
+        "sample": "🎯 Sample Data"
+    }
+    st.sidebar.success(f"**Source:** {source_names.get(data_source, 'Unknown')}")
+    
+    if st.sidebar.button("🔄 Change Data Source", type="primary"):
+        st.session_state.data_source_selected = False
+        st.session_state.web3_data_loaded = False
+        st.rerun()
+    
+    # Show Web3 loading details button if using Web3
+    if data_source == "web3" and st.session_state.get('web3_data_loaded', False):
+        if st.sidebar.button("📈 View Loading Details"):
+            web3_manager.show_loading_details_modal()
     
     # Global controls
     top_n = st.sidebar.slider("Top N for Charts", 5, 50, 20)
@@ -795,7 +881,7 @@ def main():
             charts = create_trend_charts(df, top_n, top_trends_data)
             for title, fig, explanation in charts:
                 st.subheader(title)
-                st.plotly_chart(fig, width='stretch')
+                st.plotly_chart(fig, use_container_width=True)
                 st.caption(explanation)
             
             # Data table

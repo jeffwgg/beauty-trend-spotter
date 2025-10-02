@@ -17,15 +17,9 @@ load_dotenv()
 
 class Web3DataManager:
     def __init__(self):
-        # Load IPFS configuration from environment variables
-        self.ipfs_cid = os.getenv("IPFS_CID")
-        self.ipfs_gateway = os.getenv("IPFS_GATEWAY")
-        
-        # Validate required environment variables
-        if not self.ipfs_cid:
-            raise ValueError("IPFS_CID environment variable is required")
-        if not self.ipfs_gateway:
-            raise ValueError("IPFS_GATEWAY environment variable is required")
+        # Load IPFS configuration from environment variables with fallbacks
+        self.ipfs_cid = os.getenv("IPFS_CID") or st.secrets.get("IPFS_CID", "bafybeigjxp5b4oe6wltppuyltmk35oohzpbh7qfsirwowmnwtnj7syqyzu")
+        self.ipfs_gateway = os.getenv("IPFS_GATEWAY") or st.secrets.get("IPFS_GATEWAY", "https://w3s.link/ipfs")
         
         # All your CSV files (matching local data structure)
         self.csv_files = [
@@ -51,20 +45,36 @@ class Web3DataManager:
         # Initialize session state for loading info
         if 'web3_loading_info' not in st.session_state:
             st.session_state.web3_loading_info = []
+        if 'web3_data_loaded' not in st.session_state:
+            st.session_state.web3_data_loaded = False
     
-    def get_data_source_selector(self) -> str:
+    def get_data_source_selector(self, pre_selected=None) -> str:
         """Add data source selector to sidebar"""
         st.sidebar.markdown("---")
         st.sidebar.header("🌐 Data Source")
         
-        selected = st.sidebar.selectbox(
-            "Choose data source:",
-            list(self.data_sources.keys()),
-            index=0,  # Default to Web3
-            help="Web3: Global IPFS storage\nLocal: Bundled CSV files\nSample: Demo data"
-        )
-        
-        source_type = self.data_sources[selected]
+        if pre_selected:
+            # Show selected source and allow changing
+            source_names = {v: k for k, v in self.data_sources.items()}
+            current_name = source_names.get(pre_selected, "Unknown")
+            
+            st.sidebar.success(f"**Current:** {current_name}")
+            
+            if st.sidebar.button("🔄 Change Data Source", type="primary"):
+                st.session_state.data_source_selected = False
+                st.rerun()
+            
+            st.sidebar.caption("💡 Click above to switch between Web3/Local/Sample data")
+            
+            source_type = pre_selected
+        else:
+            selected = st.sidebar.selectbox(
+                "Choose data source:",
+                list(self.data_sources.keys()),
+                index=0,  # Default to Web3
+                help="Web3: Global IPFS storage\nLocal: Bundled CSV files\nSample: Demo data"
+            )
+            source_type = self.data_sources[selected]
         
         # Show source info
         if source_type == "web3":
@@ -73,12 +83,118 @@ class Web3DataManager:
                 st.write(f"**CID:** `{self.ipfs_cid[:12]}...`")
                 st.write(f"**Gateway:** {self.ipfs_gateway}")
                 st.write("**Global Access:** ✅")
+            
+            # Add button to show loading details
+            if st.sidebar.button("📈 View Loading Details"):
+                self.show_loading_details_modal()
         elif source_type == "local":
             st.sidebar.info("📁 Using local CSV files")
         else:
             st.sidebar.warning("🎯 Using demo data")
             
         return source_type
+    
+    @st.dialog("🌐 Web3 Loading Details")
+    def show_loading_details_modal(self):
+        """Show Web3 loading details in modal"""
+        if 'web3_loading_info' in st.session_state and st.session_state.web3_loading_info:
+            st.markdown("### 📈 Loading Summary")
+            
+            for info in st.session_state.web3_loading_info:
+                if info['status'] == 'success':
+                    st.success(f"✅ **{info['filename']}** - {info['rows']} rows ({info['load_time']:.2f}s)")
+                    st.code(info['url'], language="text")
+                else:
+                    st.error(f"❌ **{info['filename']}** - {info.get('error', 'Failed')}")
+                    st.code(info['url'], language="text")
+                st.markdown("---")
+        else:
+            st.info("No Web3 loading information available.")
+    
+    def preload_web3_data(self) -> Dict[str, pd.DataFrame]:
+        """Preload all Web3 data directly from IPFS with detailed loading info"""
+        data = {}
+        
+        # File mapping for data loading
+        file_mapping = {
+            'trends': 'refined_trends.csv',
+            'segments_labels': 'segments_labels.csv',
+            'segments_video': 'segments_video.csv',
+            'product_gaps': 'product_gaps.csv',
+            'categories': 'top_categories.csv',
+            'successful_products': 'successful_products.csv',
+            'supply_types': 'top_supply_types.csv',
+            'brands': 'top_brands.csv',
+            'trending_ingredients': 'trending_ingredients.csv',
+            'recommendations': 'beauty_innovation_recommendation.csv'
+        }
+        
+        # Clear and initialize loading info
+        st.session_state.web3_loading_info = []
+        
+        # Create progress bar
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        total_files = len(file_mapping)
+        
+        for i, (key, filename) in enumerate(file_mapping.items()):
+            status_text.text(f"🌐 Loading {filename} from IPFS...")
+            
+            # Load directly from Web3 (no cache)
+            start_time = time.time()
+            data[key] = self._load_from_web3_direct(filename)
+            load_time = time.time() - start_time
+            
+            progress_bar.progress((i + 1) / total_files)
+        
+        status_text.text("✅ All data loaded successfully!")
+        st.session_state.web3_data_loaded = True
+        
+        # Clear progress indicators
+        time.sleep(1)
+        progress_bar.empty()
+        status_text.empty()
+        
+        return data
+    
+    def _load_from_web3_direct(self, filename: str) -> Optional[pd.DataFrame]:
+        """Load CSV directly from IPFS without caching"""
+        try:
+            url = f"{self.ipfs_gateway}/{self.ipfs_cid}/{filename}"
+            
+            start_time = time.time()
+            response = requests.get(url, timeout=30)
+            response.raise_for_status()
+            
+            df = pd.read_csv(io.StringIO(response.text))
+            load_time = time.time() - start_time
+            
+            # Store loading info
+            st.session_state.web3_loading_info.append({
+                'filename': filename,
+                'url': url,
+                'rows': len(df),
+                'columns': len(df.columns),
+                'load_time': load_time,
+                'status': 'success'
+            })
+            
+            return df
+            
+        except Exception as e:
+            load_time = time.time() - start_time if 'start_time' in locals() else 0
+            
+            # Store error info
+            st.session_state.web3_loading_info.append({
+                'filename': filename,
+                'url': f"{self.ipfs_gateway}/{self.ipfs_cid}/{filename}",
+                'error': str(e),
+                'load_time': load_time,
+                'status': 'error'
+            })
+            
+            return self._load_from_local(filename)
     
     @st.cache_data(ttl=300)  # Cache for 5 minutes
     def load_data(_self, filename: str, source: str = "web3") -> Optional[pd.DataFrame]:
