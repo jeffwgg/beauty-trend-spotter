@@ -405,8 +405,20 @@ def create_trend_charts(df: pd.DataFrame, top_n: int, top_trends_data: pd.DataFr
             # Sort by total_composite_score in descending order (high to low)
         df_display = top_trends_data.sort_values('total_composite_score', ascending=False).copy()
         
-        # Prepare display data
-        df_display['display_name'] = df_display['trend_name']
+        # Prepare display data - use refined trend names from df if available
+        if not df.empty and 'refined' in df.columns:
+            # Create mapping from trend_name to refined name
+            trend_mapping = {}
+            for _, row in df.iterrows():
+                if pd.notna(row.get('refined')):
+                    refined_name = row['refined'].split('(')[0].strip()
+                    trend_mapping[row.get('trend_name', '')] = refined_name
+            
+            # Apply mapping to display names
+            df_display['display_name'] = df_display['trend_name'].map(trend_mapping).fillna(df_display['trend_name'])
+        else:
+            df_display['display_name'] = df_display['trend_name']
+        
         df_display['hover_text'] = df_display.apply(
             lambda x: f"Keywords: {x['top_keywords'][:50]}...", axis=1
         )
