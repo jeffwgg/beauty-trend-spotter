@@ -775,6 +775,7 @@ def main():
             # Load from Web3/IPFS (cached)
             data = {
                 'trends': web3_manager.load_data('refined_trends.csv', data_source),
+                'top_trends_clean': web3_manager.load_data('top_trends_clean.csv', data_source),
                 'segments_labels': web3_manager.load_data('segments_labels.csv', data_source),
                 'segments_video': web3_manager.load_data('segments_video.csv', data_source),
                 'product_gaps': web3_manager.load_data('product_gaps.csv', data_source),
@@ -793,6 +794,7 @@ def main():
         else:  # sample data
             data = {
                 'trends': web3_manager.load_data('refined_trends.csv', data_source),
+                'top_trends_clean': web3_manager.load_data('top_trends_clean.csv', data_source),
                 'segments_labels': web3_manager.load_data('segments_labels.csv', data_source),
                 'segments_video': web3_manager.load_data('segments_video.csv', data_source),
                 'product_gaps': web3_manager.load_data('product_gaps.csv', data_source),
