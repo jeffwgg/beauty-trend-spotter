@@ -782,7 +782,6 @@ def main():
     if data_source == "web3":
         # Check if Web3 data is already loaded
         if not st.session_state.get('web3_data_loaded', False):
-            st.info("🌐 Loading Web3 data from IPFS... Please wait.")
             data = web3_manager.preload_web3_data()
             st.session_state.web3_data_cache = data
         else:
