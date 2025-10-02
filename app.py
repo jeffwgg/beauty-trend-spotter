@@ -67,6 +67,7 @@ def load_data(data_dir: str) -> Dict[str, pd.DataFrame]:
     """Load all CSV files with caching and error handling"""
     data_files = {
         'trends': 'refined_trends.csv',
+        'top_trends_clean': 'top_trends_clean.csv',
         'segments_labels': 'segments_labels.csv',
         'segments_video': 'segments_video.csv',
         'product_gaps': 'product_gaps.csv',
@@ -395,48 +396,115 @@ def generate_keywords_heatmap_data():
     
     return pd.DataFrame(data)
 
-def create_trend_charts(df: pd.DataFrame, top_n: int) -> List:
-    """Create trend analysis charts"""
+def create_trend_charts(df: pd.DataFrame, top_n: int, top_trends_data: pd.DataFrame = None) -> List:
+    """Create trend analysis charts using composite scores"""
     charts = []
     
-    if df.empty:
-        return charts
-    
-    # Prepare trend display data
-    df_display = df.copy()
-    if 'refined' in df_display.columns:
-        # Extract display name (before bracket) and hover text (in bracket)
-        df_display['display_name'] = df_display['refined'].str.extract(r'^([^(]+)')[0].str.strip()
-        df_display['hover_text'] = df_display['refined'].str.extract(r'\(([^)]+)\)')[0]
-        df_display['hover_text'] = df_display['hover_text'].fillna('')
-    else:
-        df_display['display_name'] = df_display.get('trend_name', 'Unknown')
-        df_display['hover_text'] = ''
-    
-    # Chart 1: Top trends by rank
-    top_trends = df_display.head(top_n)
-    fig1 = px.bar(
-        top_trends,
-        x='rank',
-        y='display_name',
-        orientation='h',
-        title=f'Top {top_n} Trends by Rank',
-        hover_data={'hover_text': True, 'rank': True} if 'hover_text' in top_trends.columns else ['rank']
-    )
-    fig1.update_layout(height=400, xaxis_title='Rank', yaxis_title='Trend')
-    charts.append(("Top Trends", fig1, "Trends ranked by popularity and engagement."))
-    
-    # Chart 2: Simple rank distribution
-    if len(top_trends) > 1:
-        fig2 = px.histogram(
-            top_trends,
-            x='rank',
-            title='Trend Rank Distribution',
-            nbins=min(20, len(top_trends))
+    # Use top_trends_clean data if available, otherwise fall back to original
+    if top_trends_data is not None and not top_trends_data.empty:
+        # Sort by total_composite_score in descending order (higher scores = better trends)
+        df_display = top_trends_data.sort_values('total_composite_score', ascending=False).copy()
+        
+        # Prepare display data
+        df_display['display_name'] = df_display['trend_name']
+        df_display['hover_text'] = df_display.apply(
+            lambda x: f"Keywords: {x['top_keywords'][:50]}...", axis=1
         )
-        fig2.update_layout(height=400, xaxis_title='Rank', yaxis_title='Count')
-        charts.append(("Rank Distribution", fig2, "Distribution of trend rankings."))
-    
+        
+        # Chart 1: Top trends by composite score
+        top_trends = df_display.head(top_n)
+        fig1 = px.bar(
+            top_trends,
+            x='total_composite_score',
+            y='display_name',
+            orientation='h',
+            title=f'Top {top_n} Trends by Composite Score',
+            hover_data={
+                'total_composite_score': ':.2f',
+                'avg_composite_score': ':.3f',
+                'trend_strength': ':.2f',
+                'n_videos': True,
+                'n_keywords': True
+            },
+            labels={'total_composite_score': 'Total Composite Score'}
+        )
+        fig1.update_layout(
+            height=400, 
+            xaxis_title='Total Composite Score', 
+            yaxis_title='Trend'
+        )
+        charts.append(("Top Trends by Score", fig1, "Trends ranked by total composite score - higher scores indicate stronger, more dominant trends."))
+
+        # Chart 2: Composite score vs trend strength
+        if len(top_trends) > 1:
+            fig2 = px.scatter(
+                top_trends,
+                x='total_composite_score',
+                y='trend_strength',
+                size='n_videos',
+                hover_name='display_name',
+                title='Trend Performance: Composite Score vs Strength',
+                labels={
+                    'total_composite_score': 'Total Composite Score',
+                    'trend_strength': 'Trend Strength',
+                    'n_videos': 'Number of Videos'
+                }
+            )
+            fig2.update_layout(height=400)
+            charts.append(("Score vs Strength", fig2, "Relationship between composite score and trend strength - size indicates video count."))
+        
+        # Chart 3: Score distribution
+        if len(top_trends) > 5:
+            fig3 = px.histogram(
+                top_trends,
+                x='total_composite_score',
+                title='Composite Score Distribution',
+                nbins=min(15, len(top_trends)),
+                labels={'total_composite_score': 'Total Composite Score'}
+            )
+            fig3.update_layout(height=400, xaxis_title='Total Composite Score', yaxis_title='Count')
+            charts.append(("Score Distribution", fig3, "Distribution of total composite scores among top trends."))
+            
+    else:
+        # Fallback to original logic if top_trends_clean data is not available
+        if df.empty:
+            return charts
+
+        # Prepare trend display data
+        df_display = df.copy()
+        if 'refined' in df_display.columns:
+            # Extract display name (before bracket) and hover text (in bracket)
+            df_display['display_name'] = df_display['refined'].str.extract(r'^([^(]+)')[0].str.strip()
+            df_display['hover_text'] = df_display['refined'].str.extract(r'\(([^)]+)\)')[0]
+            df_display['hover_text'] = df_display['hover_text'].fillna('')
+        else:
+            df_display['display_name'] = df_display.get('trend_name', 'Unknown')
+            df_display['hover_text'] = ''
+
+        # Calculate composite score (inverted rank for proper visualization)
+        # Lower rank number = higher dominance = higher composite score
+        max_rank = df_display['rank'].max()
+        df_display['composite_score'] = (max_rank - df_display['rank'] + 1) / max_rank * 100
+        
+        # Chart 1: Top trends by composite score
+        top_trends = df_display.head(top_n)
+        fig1 = px.bar(
+            top_trends,
+            x='composite_score',
+            y='display_name',
+            orientation='h',
+            title=f'Top {top_n} Trends by Composite Score',
+            hover_data={'hover_text': True, 'rank': True, 'composite_score': ':.1f'} if 'hover_text' in top_trends.columns else {'rank': True, 'composite_score': ':.1f'},
+            labels={'composite_score': 'Composite Score (%)'}
+        )
+        fig1.update_layout(
+            height=400, 
+            xaxis_title='Composite Score (%)', 
+            yaxis_title='Trend',
+            xaxis=dict(range=[0, 100])
+        )
+        charts.append(("Top Trends", fig1, "Trends ranked by composite score - higher scores indicate more dominant trends."))
+
     return charts
 
 def create_segment_charts(df_labels: pd.DataFrame, df_video: pd.DataFrame, top_n: int) -> List:
@@ -723,7 +791,8 @@ def main():
             st.warning("No trends match the current filters. Try adjusting your criteria.")
         else:
             # Charts
-            charts = create_trend_charts(df, top_n)
+            top_trends_data = data.get('top_trends_clean', pd.DataFrame())
+            charts = create_trend_charts(df, top_n, top_trends_data)
             for title, fig, explanation in charts:
                 st.subheader(title)
                 st.plotly_chart(fig, width='stretch')
