@@ -940,10 +940,10 @@ def main():
                     st.markdown("**Gen Z Comments:**")
                     genz_comments = [
                         "'This is giving main character energy! 💅'",
-                        "'No cap, this routine is fire 🔥'", 
-                        "'Periodt! Need this in my life rn'",
-                        "'Bestie spilled the tea ☕'",
-                        "'It's giving expensive but make it affordable'"
+                        "'No cap, this routine is fire'", 
+                        "'ts so skibidi lmaooo'",
+                        "'Bestie spilled the tea ahhhhh'",
+                        "'goofy ahhh product'"
                     ]
                     for comment in genz_comments:
                         st.caption(comment)
