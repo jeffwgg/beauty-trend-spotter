@@ -784,21 +784,9 @@ def main():
         if not st.session_state.get('web3_data_loaded', False):
             st.info("🌐 Loading Web3 data from IPFS... Please wait.")
             data = web3_manager.preload_web3_data()
+            st.session_state.web3_data_cache = data
         else:
-            # Load from Web3/IPFS (cached)
-            data = {
-                'trends': web3_manager.load_data('refined_trends.csv', data_source),
-                'top_trends_clean': web3_manager.load_data('top_trends_clean.csv', data_source),
-                'segments_labels': web3_manager.load_data('segments_labels.csv', data_source),
-                'segments_video': web3_manager.load_data('segments_video.csv', data_source),
-                'product_gaps': web3_manager.load_data('product_gaps.csv', data_source),
-                'categories': web3_manager.load_data('top_categories.csv', data_source),
-                'successful_products': web3_manager.load_data('successful_products.csv', data_source),
-                'supply_types': web3_manager.load_data('top_supply_types.csv', data_source),
-                'brands': web3_manager.load_data('top_brands.csv', data_source),
-                'trending_ingredients': web3_manager.load_data('trending_ingredients.csv', data_source),
-                'recommendations': web3_manager.load_data('beauty_innovation_recommendation.csv', data_source)
-            }
+            data = st.session_state.web3_data_cache
     else:
         # Load from local files or sample data
         if data_source == "local":
@@ -841,8 +829,13 @@ def main():
     
     # Show Web3 loading details button if using Web3
     if data_source == "web3" and st.session_state.get('web3_data_loaded', False):
-        if st.sidebar.button("📈 View Loading Details"):
-            web3_manager.show_loading_details_modal()
+        if st.sidebar.button("📈 View Loading Details", key="view_loading_details_btn"):
+            st.session_state.show_loading_modal = True
+    
+    # Show modal if flag is set (outside button to prevent rerun issues)
+    if st.session_state.get('show_loading_modal', False):
+        web3_manager.show_loading_details_modal()
+        st.session_state.show_loading_modal = False
     
     # Global controls
     top_n = st.sidebar.slider("Top N for Charts", 5, 50, 20)
